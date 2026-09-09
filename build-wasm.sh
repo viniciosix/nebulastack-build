@@ -32,10 +32,22 @@ c++ -std=c++17 -O2 astro_pipeline_generator.cpp generator_main.cpp \
   "$HALIDE_LIBRARY_PATH" -ldl -lpthread -lz -o "$BUILD_ROOT/astro_pipeline_generator"
 
 mkdir -p "$BUILD_ROOT/generated"
-LD_LIBRARY_PATH="$HALIDE_LIBRARY_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-  "$BUILD_ROOT/astro_pipeline_generator" \
-    -g nebulastack_astro_pipeline -f nebulastack_astro_pipeline -e static_library,h \
-    -o "$BUILD_ROOT/generated" target=wasm-32-wasmrt-wasm_simd128
+GENERATOR_ARGS=(
+  -g nebulastack_astro_pipeline
+  -f nebulastack_astro_pipeline
+  -e static_library,h
+  -o "$BUILD_ROOT/generated"
+  target=wasm-32-wasmrt-wasm_simd128
+)
+if ! LD_LIBRARY_PATH="$HALIDE_LIBRARY_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  "$BUILD_ROOT/astro_pipeline_generator" "${GENERATOR_ARGS[@]}"; then
+  if command -v gdb >/dev/null 2>&1; then
+    LD_LIBRARY_PATH="$HALIDE_LIBRARY_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+      gdb --batch --ex run --ex "thread apply all backtrace" --args \
+      "$BUILD_ROOT/astro_pipeline_generator" "${GENERATOR_ARGS[@]}" || true
+  fi
+  exit 1
+fi
 
 em++ -std=c++17 -O3 -msimd128 --no-entry \
   wasm_wrapper.cpp "$BUILD_ROOT/generated/nebulastack_astro_pipeline.a" \
