@@ -27,7 +27,8 @@ if [[ -z "$HALIDE_LIBRARY_PATH" ]]; then
   exit 1
 fi
 HALIDE_LIBRARY_DIR="$(dirname "$HALIDE_LIBRARY_PATH")"
-c++ -std=c++17 -O2 astro_pipeline_generator.cpp generator_main.cpp \
+c++ -std=c++17 -O1 -g -fno-omit-frame-pointer -fsanitize=address \
+  astro_pipeline_generator.cpp generator_main.cpp \
   -I"$HALIDE_ROOT/include" -Wl,-rpath,"$HALIDE_LIBRARY_DIR" \
   "$HALIDE_LIBRARY_PATH" -ldl -lpthread -lz -o "$BUILD_ROOT/astro_pipeline_generator"
 
