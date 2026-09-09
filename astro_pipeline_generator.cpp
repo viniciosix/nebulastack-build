@@ -47,27 +47,22 @@ public:
 
     void generate() {
         Func bounded = BoundaryConditions::repeat_edge(input);
-        Func linear{"linear"};
-        Func luminance{"luminance"};
         linear(x, y, c) = cast<float>(bounded(x, y, c)) / 65535.0f;
         luminance(x, y) = linear(x, y, 0) * 0.2126f + linear(x, y, 1) * 0.7152f +
                           linear(x, y, 2) * 0.0722f;
 
-        Func psf = gaussian_blur(luminance, deconvolution_radius, "psf");
-        Func ratio{"ratio"};
+        psf = gaussian_blur(luminance, deconvolution_radius, "psf");
         ratio(x, y) = luminance(x, y) / max(psf(x, y), 0.00001f);
-        Func correction = gaussian_blur(ratio, deconvolution_radius, "correction");
-        Func restored{"restored"};
+        correction = gaussian_blur(ratio, deconvolution_radius, "correction");
         Expr restoration = luminance(x, y) * clamp(correction(x, y), 0.74f, 1.26f);
         Expr signal_normalized = clamp((luminance(x, y) - 0.002f) / 0.048f, 0.0f, 1.0f);
         Expr signal = signal_normalized * signal_normalized * (3.0f - 2.0f * signal_normalized);
         restored(x, y) = luminance(x, y) + (restoration - luminance(x, y)) *
                                                clamp(deconvolution, 0.0f, 1.0f) * 0.72f * signal;
 
-        Func layer_one = atrous_blur(restored, 1, "layer_one");
-        Func layer_two = atrous_blur(layer_one, 2, "layer_two");
-        Func layer_three = atrous_blur(layer_two, 4, "layer_three");
-        Func enhanced{"enhanced"};
+        layer_one = atrous_blur(restored, 1, "layer_one");
+        layer_two = atrous_blur(layer_one, 2, "layer_two");
+        layer_three = atrous_blur(layer_two, 4, "layer_three");
         Expr fine_detail = restored(x, y) - layer_one(x, y);
         Expr medium_detail = layer_one(x, y) - layer_two(x, y);
         Expr large_detail = layer_two(x, y) - layer_three(x, y);
@@ -96,6 +91,11 @@ public:
         output.dim(0).set_stride(4);
         output.dim(2).set_stride(1).set_bounds(0, 4);
 
+        for (Func stage : {luminance, psf, ratio, correction, restored, layer_one, layer_two,
+                           layer_three, enhanced}) {
+            stage.compute_root().vectorize(x, 8);
+        }
+
         Var xo{"xo"}, xi{"xi"};
         output.bound(c, 0, 4).reorder(c, x, y).unroll(c).split(x, xo, xi, 8).vectorize(xi);
         if (get_target().has_feature(Target::WasmThreads)) {
@@ -109,6 +109,16 @@ private:
         return normalized * normalized * (3.0f - 2.0f * normalized);
     }
 
+    Func linear{"linear"};
+    Func luminance{"luminance"};
+    Func psf{"psf"};
+    Func ratio{"ratio"};
+    Func correction{"correction"};
+    Func restored{"restored"};
+    Func layer_one{"layer_one"};
+    Func layer_two{"layer_two"};
+    Func layer_three{"layer_three"};
+    Func enhanced{"enhanced"};
     Var x{"x"}, y{"y"}, c{"c"};
 };
 
