@@ -34,12 +34,16 @@ jobs:
           .emsdk/emsdk activate 6.0.9
 
       - name: Build Halide SIMD module
+        id: build
+        continue-on-error: true
         shell: bash
         run: |
+          set -o pipefail
           source .emsdk/emsdk_env.sh
-          bash build-wasm.sh
+          bash build-wasm.sh 2>&1 | tee build.log
 
       - name: Inspect generated module
+        if: steps.build.outcome == 'success'
         shell: bash
         run: |
           file dist/astro-halide.wasm
@@ -47,6 +51,7 @@ jobs:
           sha256sum --check dist/SHA256SUMS
 
       - name: Upload browser artifacts
+        if: steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: nebulastack-halide-wasm
@@ -58,7 +63,7 @@ jobs:
           retention-days: 30
 
       - name: Publish latest browser artifacts
-        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
+        if: github.event_name == 'push' && github.actor != 'github-actions[bot]' && steps.build.outcome == 'success'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
@@ -66,3 +71,20 @@ jobs:
           git add -f dist/astro-halide.js dist/astro-halide.wasm dist/SHA256SUMS
           git commit -m "Update Halide WebAssembly artifacts [skip ci]"
           git push
+
+      - name: Publish failed build diagnostic
+        if: always() && github.event_name == 'push' && github.actor != 'github-actions[bot]' && steps.build.outcome == 'failure'
+        shell: bash
+        run: |
+          mkdir -p diagnostics
+          cp build.log diagnostics/latest-build.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f diagnostics/latest-build.log
+          git commit -m "Record Halide build diagnostic [skip ci]"
+          git push
+
+      - name: Fail unsuccessful build
+        if: steps.build.outcome == 'failure'
+        shell: bash
+        run: exit 1
