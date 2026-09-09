@@ -21,7 +21,7 @@ if [[ ! -d "$BUILD_ROOT/halide" ]]; then
 fi
 
 HALIDE_ROOT="$BUILD_ROOT/halide"
-HALIDE_LIBRARY_PATH="$(find "$HALIDE_ROOT" -type f -name 'libHalide.so' -print -quit)"
+HALIDE_LIBRARY_PATH="$(find "$HALIDE_ROOT" -type f -name 'libHalide.so*' -print -quit)"
 if [[ -z "$HALIDE_LIBRARY_PATH" ]]; then
   echo "libHalide.so was not found" >&2
   exit 1
@@ -29,8 +29,8 @@ fi
 HALIDE_LIBRARY_DIR="$(dirname "$HALIDE_LIBRARY_PATH")"
 
 c++ -std=c++17 -O2 astro_pipeline_generator.cpp \
-  -I"$HALIDE_ROOT/include" -L"$HALIDE_LIBRARY_DIR" -Wl,-rpath,"$HALIDE_LIBRARY_DIR" \
-  -lHalide -ldl -lpthread -lz -o "$BUILD_ROOT/astro_pipeline_generator"
+  -I"$HALIDE_ROOT/include" -Wl,-rpath,"$HALIDE_LIBRARY_DIR" \
+  "$HALIDE_LIBRARY_PATH" -ldl -lpthread -lz -o "$BUILD_ROOT/astro_pipeline_generator"
 
 mkdir -p "$BUILD_ROOT/generated"
 LD_LIBRARY_PATH="$HALIDE_LIBRARY_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
