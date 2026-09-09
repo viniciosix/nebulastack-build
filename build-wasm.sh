@@ -56,6 +56,7 @@ em++ -std=c++17 -O3 -msimd128 --no-entry \
   -sENVIRONMENT=worker -sFILESYSTEM=0 -sALLOW_MEMORY_GROWTH=1 \
   -sINITIAL_MEMORY=33554432 -sMAXIMUM_MEMORY=2147483648 -sMALLOC=emmalloc -sASSERTIONS=0 \
   -sEXPORTED_FUNCTIONS=_malloc,_free,_nebulastack_process_tile \
+  -sEXPORTED_RUNTIME_METHODS=HEAPU8,HEAPU16 \
   -o "$DIST_ROOT/astro-halide.js"
 
 test -s "$DIST_ROOT/astro-halide.js"
