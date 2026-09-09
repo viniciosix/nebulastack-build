@@ -1,0 +1,6 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+100  174M  100  174M    0     0   255M      0 --:--:-- --:--:-- --:--:--  255M
+/home/runner/work/nebulastack-build/nebulastack-build/.build/Halide-21.0.0-x86-64-linux-b629c80de18f1534ec71fddd8b567aa7027a0876.tar.gz: OK
+build-wasm.sh: line 38:  2312 Segmentation fault      (core dumped) LD_LIBRARY_PATH="$HALIDE_LIBRARY_DIR${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$BUILD_ROOT/astro_pipeline_generator" -g nebulastack_astro_pipeline -f nebulastack_astro_pipeline -e static_library,h -o "$BUILD_ROOT/generated" target=wasm-32-wasmrt-wasm_simd128
