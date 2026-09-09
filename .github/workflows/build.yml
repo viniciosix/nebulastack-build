@@ -1,0 +1,58 @@
+name: Build Halide WebAssembly
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Halide and Emscripten
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            .emsdk
+          key: nebulastack-halide-21-emscripten-6.0.9-v1
+
+      - name: Install Emscripten 6.0.9
+        shell: bash
+        run: |
+          if [[ ! -d .emsdk/.git ]]; then
+            git clone --depth 1 https://github.com/emscripten-core/emsdk.git .emsdk
+          fi
+          .emsdk/emsdk install 6.0.9
+          .emsdk/emsdk activate 6.0.9
+
+      - name: Build Halide SIMD module
+        shell: bash
+        run: |
+          source .emsdk/emsdk_env.sh
+          bash build-wasm.sh
+
+      - name: Inspect generated module
+        shell: bash
+        run: |
+          file dist/astro-halide.wasm
+          ls -lh dist
+          sha256sum --check dist/SHA256SUMS
+
+      - name: Upload browser artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nebulastack-halide-wasm
+          path: |
+            dist/astro-halide.js
+            dist/astro-halide.wasm
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
