@@ -22,7 +22,8 @@ jobs:
           path: |
             .build
             .emsdk
-          key: nebulastack-halide-21-emscripten-6.0.9-v1
+          key: nebulastack-halide-21-emscripten-6.0.9-v2
+          save-always: true
 
       - name: Install Emscripten 6.0.9
         shell: bash
