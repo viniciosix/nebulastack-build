@@ -27,8 +27,13 @@ if [[ -z "$HALIDE_LIBRARY_PATH" ]]; then
   exit 1
 fi
 HALIDE_LIBRARY_DIR="$(dirname "$HALIDE_LIBRARY_PATH")"
+HALIDE_GENGEN_PATH="$(find "$HALIDE_ROOT" -type f -name 'GenGen.cpp' -print -quit)"
+if [[ -z "$HALIDE_GENGEN_PATH" ]]; then
+  echo "GenGen.cpp was not found" >&2
+  exit 1
+fi
 
-c++ -std=c++17 -O2 astro_pipeline_generator.cpp \
+c++ -std=c++17 -O2 astro_pipeline_generator.cpp "$HALIDE_GENGEN_PATH" \
   -I"$HALIDE_ROOT/include" -Wl,-rpath,"$HALIDE_LIBRARY_DIR" \
   "$HALIDE_LIBRARY_PATH" -ldl -lpthread -lz -o "$BUILD_ROOT/astro_pipeline_generator"
 
