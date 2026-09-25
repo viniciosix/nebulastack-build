@@ -1,0 +1,176 @@
+--- a/README.md
++++ b/README.md
+@@ -2,7 +2,7 @@
+ 
+ Aplicativo Android simples para testar e controlar a intensidade da lanterna usando somente APIs públicas do Android (`CameraManager`).
+ 
+-## Versão 1.2.0
++## Versão 1.3.0
+ 
+ - Detecta automaticamente a câmera traseira com flash.
+ - Lê `FLASH_INFO_AVAILABLE`.
+@@ -13,6 +13,8 @@
+ - Salva o último nível escolhido e restaura na próxima abertura.
+ - Atalhos adaptativos: Baixo, Médio, Alto e Máximo.
+ - Diagnóstico copiável com informações do aparelho, flash, nível selecionado, nível salvo e versão do app.
++- Em Android 15+ lê também os metadados separados de `TORCH` e `SINGLE`: máximo e padrão para `FLASH_TORCH_STRENGTH_*` e `FLASH_SINGLE_STRENGTH_*`.
++- Compara a quantidade de níveis reportada em `SINGLE` e `TORCH` sem assumir que os números representam potência luminosa proporcional.
+ - Sem internet, analytics, anúncios ou permissões desnecessárias.
+ 
+ No Moto G86 5G testado, o firmware expõe níveis de 1 a 6 e nível padrão 3.
+--- a/app/build.gradle
++++ b/app/build.gradle
+@@ -14,8 +14,8 @@
+         applicationId 'com.vinicio.torchlevel'
+         minSdk 33
+         targetSdk 36
+-        versionCode 3
+-        versionName '1.2.0'
++        versionCode 4
++        versionName '1.3.0'
+     }
+ 
+     buildTypes {
+--- a/app/src/main/java/com/vinicio/torchlevel/MainActivity.java
++++ b/app/src/main/java/com/vinicio/torchlevel/MainActivity.java
+@@ -40,6 +40,10 @@
+     private int defaultLevel = 1;
+     private int selectedLevel = 1;
+     private int lensFacing = -1;
++    private int captureTorchMaxLevel = -1;
++    private int captureTorchDefaultLevel = -1;
++    private int singleFlashMaxLevel = -1;
++    private int singleFlashDefaultLevel = -1;
+     private boolean updatingSlider;
+     private boolean callbackRegistered;
+ 
+@@ -186,6 +190,10 @@
+         defaultLevel = 1;
+         selectedLevel = 1;
+         lensFacing = -1;
++        captureTorchMaxLevel = -1;
++        captureTorchDefaultLevel = -1;
++        singleFlashMaxLevel = -1;
++        singleFlashDefaultLevel = -1;
+ 
+         statusHeadline.setText("Verificando o flash…");
+         statusDescription.setText("Consultando as características expostas pelo CameraManager.");
+@@ -217,7 +225,37 @@
+                         : Math.max(1, Math.min(defaultValue, candidateMax));
+                 int candidateFacing = facingValue == null ? -1 : facingValue;
+ 
+-                Candidate candidate = new Candidate(id, candidateFacing, candidateMax, candidateDefault);
++                int candidateCaptureTorchMax = -1;
++                int candidateCaptureTorchDefault = -1;
++                int candidateSingleMax = -1;
++                int candidateSingleDefault = -1;
++
++                if (Build.VERSION.SDK_INT >= 35) {
++                    Integer captureTorchMaxValue = characteristics.get(
++                            CameraCharacteristics.FLASH_TORCH_STRENGTH_MAX_LEVEL);
++                    Integer captureTorchDefaultValue = characteristics.get(
++                            CameraCharacteristics.FLASH_TORCH_STRENGTH_DEFAULT_LEVEL);
++                    Integer singleMaxValue = characteristics.get(
++                            CameraCharacteristics.FLASH_SINGLE_STRENGTH_MAX_LEVEL);
++                    Integer singleDefaultValue = characteristics.get(
++                            CameraCharacteristics.FLASH_SINGLE_STRENGTH_DEFAULT_LEVEL);
++
++                    candidateCaptureTorchMax = positiveOrUnavailable(captureTorchMaxValue);
++                    candidateCaptureTorchDefault = positiveOrUnavailable(captureTorchDefaultValue);
++                    candidateSingleMax = positiveOrUnavailable(singleMaxValue);
++                    candidateSingleDefault = positiveOrUnavailable(singleDefaultValue);
++                }
++
++                Candidate candidate = new Candidate(
++                        id,
++                        candidateFacing,
++                        candidateMax,
++                        candidateDefault,
++                        candidateCaptureTorchMax,
++                        candidateCaptureTorchDefault,
++                        candidateSingleMax,
++                        candidateSingleDefault
++                );
+ 
+                 if (bestAny == null || candidate.maxLevel > bestAny.maxLevel) {
+                     bestAny = candidate;
+@@ -242,6 +280,10 @@
+             lensFacing = chosen.lensFacing;
+             maxLevel = Math.max(1, chosen.maxLevel);
+             defaultLevel = clampToRange(chosen.defaultLevel, 1, maxLevel);
++            captureTorchMaxLevel = chosen.captureTorchMaxLevel;
++            captureTorchDefaultLevel = chosen.captureTorchDefaultLevel;
++            singleFlashMaxLevel = chosen.singleFlashMaxLevel;
++            singleFlashDefaultLevel = chosen.singleFlashDefaultLevel;
+             selectedLevel = loadSavedLevelOrDefault();
+             flashAvailable = true;
+             torchAvailable = true;
+@@ -504,8 +546,13 @@
+                 + "Camera ID: " + valueOrDash(torchCameraId) + "\n"
+                 + "Lens facing: " + lensFacingLabel(lensFacing) + "\n"
+                 + "FLASH_INFO_AVAILABLE: " + (flashAvailable ? "true" : "false") + "\n"
+-                + "Maximum strength level: " + (flashAvailable ? String.valueOf(maxLevel) : "N/D") + "\n"
+-                + "Default strength level: " + (flashAvailable ? String.valueOf(defaultLevel) : "N/D") + "\n"
++                + "Maximum strength level (CameraManager torch): " + (flashAvailable ? String.valueOf(maxLevel) : "N/D") + "\n"
++                + "Default strength level (CameraManager torch): " + (flashAvailable ? String.valueOf(defaultLevel) : "N/D") + "\n"
++                + "Capture TORCH max level: " + levelOrUnavailable(captureTorchMaxLevel) + "\n"
++                + "Capture TORCH default level: " + levelOrUnavailable(captureTorchDefaultLevel) + "\n"
++                + "SINGLE flash max level: " + levelOrUnavailable(singleFlashMaxLevel) + "\n"
++                + "SINGLE flash default level: " + levelOrUnavailable(singleFlashDefaultLevel) + "\n"
++                + "SINGLE reports more levels than TORCH: " + compareSingleVsTorchLevels() + "\n"
+                 + "Selected strength level: " + (flashAvailable ? String.valueOf(selectedLevel) : "N/D") + "\n"
+                 + "Saved strength level: " + savedStrength + "\n"
+                 + "Actual API strength level: " + actualStrength + "\n"
+@@ -537,6 +584,20 @@
+         }
+     }
+ 
++
++    private static int positiveOrUnavailable(Integer value) {
++        return value == null || value < 1 ? -1 : value;
++    }
++
++    private static String levelOrUnavailable(int level) {
++        return level < 1 ? "N/D" : String.valueOf(level);
++    }
++
++    private String compareSingleVsTorchLevels() {
++        if (singleFlashMaxLevel < 1 || captureTorchMaxLevel < 1) return "N/D";
++        return singleFlashMaxLevel > captureTorchMaxLevel ? "true" : "false";
++    }
++
+     private int clampLevel(int level) {
+         return clampToRange(level, 1, Math.max(1, maxLevel));
+     }
+@@ -592,12 +653,29 @@
+         final int lensFacing;
+         final int maxLevel;
+         final int defaultLevel;
+-
+-        Candidate(String cameraId, int lensFacing, int maxLevel, int defaultLevel) {
++        final int captureTorchMaxLevel;
++        final int captureTorchDefaultLevel;
++        final int singleFlashMaxLevel;
++        final int singleFlashDefaultLevel;
++
++        Candidate(
++                String cameraId,
++                int lensFacing,
++                int maxLevel,
++                int defaultLevel,
++                int captureTorchMaxLevel,
++                int captureTorchDefaultLevel,
++                int singleFlashMaxLevel,
++                int singleFlashDefaultLevel
++        ) {
+             this.cameraId = cameraId;
+             this.lensFacing = lensFacing;
+             this.maxLevel = maxLevel;
+             this.defaultLevel = defaultLevel;
++            this.captureTorchMaxLevel = captureTorchMaxLevel;
++            this.captureTorchDefaultLevel = captureTorchDefaultLevel;
++            this.singleFlashMaxLevel = singleFlashMaxLevel;
++            this.singleFlashDefaultLevel = singleFlashDefaultLevel;
+         }
+     }
+ }
