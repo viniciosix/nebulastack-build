@@ -21,7 +21,7 @@ jobs:
       - name: Checkout isolated build branch
         uses: actions/checkout@v4
 
-      - name: Reassemble Lanterna G86 v1.2.0 source
+      - name: Reassemble Lanterna G86 v1.2.0 base
         run: |
           rm -rf /tmp/lanterna-g86
           mkdir -p /tmp/lanterna-g86
@@ -29,9 +29,15 @@ jobs:
           base64 --decode /tmp/LanternaG86-source.zip.b64 > /tmp/LanternaG86-source.zip
           unzip -q /tmp/LanternaG86-source.zip -d /tmp/lanterna-g86
           test -f /tmp/lanterna-g86/LanternaG86/app/build.gradle
-          grep -q "versionName '1.2.0'" /tmp/lanterna-g86/LanternaG86/app/build.gradle
           sed -i '/app:checkable="true"/d' /tmp/lanterna-g86/LanternaG86/app/src/main/res/layout/activity_main.xml
-          sed -i '/compileSdk 36/a\\    buildFeatures { buildConfig true }' /tmp/lanterna-g86/LanternaG86/app/build.gradle
+          sed -i '/compileSdk 36/a\    buildFeatures { buildConfig true }' /tmp/lanterna-g86/LanternaG86/app/build.gradle
+
+      - name: Apply v1.3.0 diagnostic upgrade
+        run: |
+          cd /tmp/lanterna-g86/LanternaG86
+          patch -p1 < "$GITHUB_WORKSPACE/lanterna-g86-v130/upgrade.patch"
+          grep -q "versionName '1.3.0'" app/build.gradle
+          grep -q "FLASH_SINGLE_STRENGTH_MAX_LEVEL" app/src/main/java/com/vinicio/torchlevel/MainActivity.java
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -60,10 +66,26 @@ jobs:
           test -f /tmp/lanterna-g86/LanternaG86/app/build/outputs/apk/debug/app-debug.apk
           ls -lh /tmp/lanterna-g86/LanternaG86/app/build/outputs/apk/debug/app-debug.apk
 
+      - name: Package apksigner tool for local signing
+        run: |
+          rm -rf /tmp/apksigner-tool
+          mkdir -p /tmp/apksigner-tool/lib
+          cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" /tmp/apksigner-tool/
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/apksigner-tool/lib/
+          chmod +x /tmp/apksigner-tool/apksigner
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: LanternaG86-v1.2.0-app-debug
+          name: LanternaG86-v1.3.0-app-debug
           path: /tmp/lanterna-g86/LanternaG86/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
+
+      - name: Upload apksigner tool
+        uses: actions/upload-artifact@v4
+        with:
+          name: apksigner-35
+          path: /tmp/apksigner-tool
+          if-no-files-found: error
+          retention-days: 1
